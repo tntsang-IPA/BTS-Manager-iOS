@@ -1,0 +1,49 @@
+name: BTS Manager iOS unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Mobile/**'
+      - '.github/workflows/build-ios-unsigned.yml'
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: Mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+
+      - name: Prepare iOS target
+        run: ./scripts/prepare_ios.sh
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Build iOS without Apple signing
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          rm -rf build/ios/unsigned_ipa/Payload
+          mkdir -p build/ios/unsigned_ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/unsigned_ipa/Payload/Runner.app
+          cd build/ios/unsigned_ipa
+          zip -qry BTS_Manager_Mobile_V85_60_50_UNSIGNED.ipa Payload
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: BTS_Manager_Mobile_V85_60_50_UNSIGNED_IPA
+          path: Mobile/build/ios/unsigned_ipa/BTS_Manager_Mobile_V85_60_50_UNSIGNED.ipa
+          if-no-files-found: error
