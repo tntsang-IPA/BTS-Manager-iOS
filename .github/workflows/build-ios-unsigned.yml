@@ -25,7 +25,10 @@ jobs:
           cache: true
 
       - name: Prepare iOS target
-        run: ./scripts/prepare_ios.sh
+  run: |
+    chmod +x scripts/prepare_ios.sh
+    chmod +x scripts/build_unsigned_ipa.sh
+    ./scripts/prepare_ios.sh
 
       - name: Resolve dependencies
         run: flutter pub get
