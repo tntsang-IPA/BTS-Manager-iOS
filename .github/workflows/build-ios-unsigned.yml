@@ -24,11 +24,12 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Prepare iOS target
-  run: |
-    chmod +x scripts/prepare_ios.sh
-    chmod +x scripts/build_unsigned_ipa.sh
-    ./scripts/prepare_ios.sh
+            - name: Prepare iOS target
+        working-directory: Mobile
+        run: |
+          chmod +x scripts/prepare_ios.sh
+          chmod +x scripts/build_unsigned_ipa.sh
+          ./scripts/prepare_ios.sh
 
       - name: Resolve dependencies
         run: flutter pub get
