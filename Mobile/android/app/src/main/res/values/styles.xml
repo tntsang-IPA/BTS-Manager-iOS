@@ -1,0 +1,9 @@
+<resources>
+    <style name="LaunchTheme" >
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+    <style name="NormalTheme" >
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>

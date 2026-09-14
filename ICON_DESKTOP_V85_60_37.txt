@@ -1,0 +1,1 @@
+V85.60.45: PC icon is BTS_Manager_Icon.ico. Desktop shortcut is created both by BUILD_V85_60_ALL.bat after EXE build and by INSTALL_PC_V85_60.bat. The script resolves the real Windows DesktopDirectory, creates the Desktop folder if needed, creates BTS Manager.lnk, and verifies the .lnk exists.

@@ -1,0 +1,58 @@
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+
+// Release signing is provisioned by build_apk.bat into android/key.properties.
+// The keystore itself is stored outside the project under the user's profile.
+def keystorePropertiesFile = rootProject.file("key.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    namespace "com.btsmanager.mobile"
+    compileSdk 36
+
+    // Prefer the validated NDK 28.2 used by V83.3. The build script can
+    // override this with BTS_NDK_VERSION when a compatible installed NDK is selected.
+    ndkVersion "28.2.13676358"
+
+    defaultConfig {
+        applicationId "com.btsmanager.mobile"
+        minSdk 23
+        targetSdk 36
+        versionCode flutter.versionCode
+        versionName flutter.versionName
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = "17" }
+
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+}
+
+flutter { source = "../.." }

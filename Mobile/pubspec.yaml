@@ -1,0 +1,22 @@
+name: bts_manager_mobile
+publish_to: 'none'
+version: 85.60.31+8573
+description: BTS Manager Mobile V85.60.40 - notification permission by station email; bidirectional sync.
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.8.0
+  cupertino_icons: ^1.0.8
+  geolocator: ^13.0.1
+  sqflite: ^2.4.1
+  path: ^1.9.0
+  connectivity_plus: ^6.1.4
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/phat_trien_moi.png

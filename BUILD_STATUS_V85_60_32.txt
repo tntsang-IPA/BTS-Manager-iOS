@@ -1,0 +1,7 @@
+
+V85.60.32 CLOUD UI NON-BLOCKING FIX
+- Supabase login validates one lightweight authenticated table request instead of probing 13 tables serially.
+- Cloud bootstrap/auto/manual sync runs on a dedicated QThread with its own SQLite connection.
+- UI refresh occurs only after background sync commits.
+- Existing MLL/KPI/notifications/permissions logic retained.
+- Source syntax validated in Linux; Windows EXE/APK binaries require the project Windows/Flutter build environment.
