@@ -41,12 +41,47 @@ for f in (Path('ios/Flutter/Debug.xcconfig'), Path('ios/Flutter/Release.xcconfig
         lines=[line for line in lines if 'Pods/Target Support Files' not in line]
         f.write_text('\n'.join(lines)+'\n')
 
-# Fixed bundle identifier for the iOS target.
-for f in [Path('ios/Runner.xcodeproj/project.pbxproj')]:
-    s=f.read_text()
-    s=s.replace('PRODUCT_BUNDLE_IDENTIFIER = com.btsmanager.btsManagerMobile;', 'PRODUCT_BUNDLE_IDENTIFIER = com.btsmanager.mobile;')
-    s=s.replace('PRODUCT_BUNDLE_IDENTIFIER = com.btsmanager.bts_manager_mobile;', 'PRODUCT_BUNDLE_IDENTIFIER = com.btsmanager.mobile;')
-    f.write_text(s)
+# Fixed bundle identifier for the iOS target and force the privacy keys into
+# the final generated app Info.plist as Xcode build settings. This is in
+# addition to Runner/Info.plist so the compiled .app cannot lose the keys.
+f=Path('ios/Runner.xcodeproj/project.pbxproj')
+s=f.read_text()
+s=s.replace('PRODUCT_BUNDLE_IDENTIFIER = com.btsmanager.btsManagerMobile;', 'PRODUCT_BUNDLE_IDENTIFIER = com.btsmanager.mobile;')
+s=s.replace('PRODUCT_BUNDLE_IDENTIFIER = com.btsmanager.bts_manager_mobile;', 'PRODUCT_BUNDLE_IDENTIFIER = com.btsmanager.mobile;')
+privacy = {
+    'INFOPLIST_KEY_NSLocationWhenInUseUsageDescription': 'BTS Manager cần quyền vị trí để xác định vị trí hiện tại và tính khoảng cách đến các trạm BTS gần nhất.',
+    'INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription': 'BTS Manager cần quyền vị trí để hỗ trợ chức năng xác định các trạm BTS gần nhất.',
+    'INFOPLIST_KEY_NSLocationAlwaysUsageDescription': 'BTS Manager cần quyền vị trí để hỗ trợ chức năng xác định các trạm BTS gần nhất.',
+}
+# Add each privacy key to every Xcode build configuration.
+# Xcode then writes the keys into the final Runner.app/Info.plist even when
+# the generated project uses INFOPLIST_KEY_* build settings.
+import re
+for key,val in privacy.items():
+    if key in s:
+        pass
+
+# Patch the generated project file itself, not the shell environment.
+# Each `buildSettings = {` belongs to an XCBuildConfiguration section.
+def patch_build_settings(text):
+    def repl(m):
+        indent=m.group(1)
+        following=m.group(2)
+        additions=[]
+        for key,val in privacy.items():
+            if re.search(rf'(?m)^\s*{re.escape(key)}\s*=', following):
+                continue
+            additions.append(f'{indent}\t{key} = "{val}";')
+        if not additions:
+            return m.group(0)
+        return m.group(0) + ''.join(additions)
+    # Capture only the opening line plus the next small window for duplicate detection.
+    return re.sub(r'(?m)^(\s*)buildSettings = \{\n((?:[ \t]+.*\n){0,80})', repl, text)
+
+s=patch_build_settings(s)
+f.write_text(s)
+
+# Keep the same BTS Manager icon used by PC/APK.
 
 # Keep the same BTS Manager icon used by PC/APK.
 asset=Path('assets/bts_manager_icon_ios.png')
