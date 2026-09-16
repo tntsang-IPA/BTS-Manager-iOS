@@ -39,6 +39,21 @@ jobs:
             --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
             --dart-define=SUPABASE_PUBLISHABLE_KEY="${{ secrets.SUPABASE_PUBLISHABLE_KEY }}"
 
+      - name: Verify and harden final iOS Info.plist
+        run: |
+          APP_PLIST="build/ios/iphoneos/Runner.app/Info.plist"
+          test -f "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string BTS Manager cần quyền vị trí để xác định vị trí hiện tại và tính khoảng cách đến các trạm BTS gần nhất." "$APP_PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :NSLocationWhenInUseUsageDescription BTS Manager cần quyền vị trí để xác định vị trí hiện tại và tính khoảng cách đến các trạm BTS gần nhất." "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSLocationAlwaysAndWhenInUseUsageDescription string BTS Manager cần quyền vị trí để hỗ trợ chức năng xác định các trạm BTS gần nhất." "$APP_PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :NSLocationAlwaysAndWhenInUseUsageDescription BTS Manager cần quyền vị trí để hỗ trợ chức năng xác định các trạm BTS gần nhất." "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSLocationAlwaysUsageDescription string BTS Manager cần quyền vị trí để hỗ trợ chức năng xác định các trạm BTS gần nhất." "$APP_PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :NSLocationAlwaysUsageDescription BTS Manager cần quyền vị trí để hỗ trợ chức năng xác định các trạm BTS gần nhất." "$APP_PLIST"
+          echo "--- FINAL APP INFO.PLIST LOCATION KEYS ---"
+          /usr/libexec/PlistBuddy -c "Print :NSLocationWhenInUseUsageDescription" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :NSLocationAlwaysAndWhenInUseUsageDescription" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :NSLocationAlwaysUsageDescription" "$APP_PLIST"
+
       - name: Package unsigned IPA
         run: |
           rm -rf build/ios/unsigned_ipa/Payload
