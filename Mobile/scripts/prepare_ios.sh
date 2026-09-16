@@ -15,6 +15,30 @@ if 'NSLocationWhenInUseUsageDescription' not in s:
     s=s.replace(needle, insert+needle, 1)
 p.write_text(s)
 
+# Configure geolocator_apple for foreground-only location permission.
+podfile=Path('ios/Podfile')
+pod=podfile.read_text() if podfile.exists() else ''
+marker='# BTS Manager: geolocator iOS foreground-only location permission'
+if marker not in pod:
+    code='''
+    # BTS Manager: geolocator iOS foreground-only location permission
+    if target.name == "geolocator_apple"
+      target.build_configurations.each do |config|
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+        defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS']
+        defs = [defs] unless defs.is_a?(Array)
+        defs << 'BYPASS_PERMISSION_LOCATION_ALWAYS=1' unless defs.include?('BYPASS_PERMISSION_LOCATION_ALWAYS=1')
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = defs
+      end
+    end
+'''
+    loop_marker='installer.pods_project.targets.each do |target|'
+    if loop_marker in pod:
+        pod=pod.replace(loop_marker, loop_marker+code, 1)
+    else:
+        pod += '''\n\npost_install do |installer|\n  installer.pods_project.targets.each do |target|\n''' + code + '''  end\nend\n'''
+    podfile.write_text(pod)
+
 # Fixed bundle identifier for the iOS target.
 for f in [Path('ios/Runner.xcodeproj/project.pbxproj')]:
     s=f.read_text()
