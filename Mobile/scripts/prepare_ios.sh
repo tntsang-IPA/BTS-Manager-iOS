@@ -7,6 +7,9 @@ flutter create --platforms=ios --org com.btsmanager .
 
 python3 - <<'PY'
 from pathlib import Path
+import re
+import json
+from PIL import Image
 
 # iOS foreground/background location permission declarations.
 p=Path('ios/Runner/Info.plist')
@@ -41,66 +44,98 @@ for f in (Path('ios/Flutter/Debug.xcconfig'), Path('ios/Flutter/Release.xcconfig
         lines=[line for line in lines if 'Pods/Target Support Files' not in line]
         f.write_text('\n'.join(lines)+'\n')
 
-# Fixed bundle identifier for the iOS target and force the privacy keys into
-# the final generated app Info.plist as Xcode build settings. This is in
-# addition to Runner/Info.plist so the compiled .app cannot lose the keys.
+# Fixed bundle identifier and force the generated Xcode target to use the
+# explicit Runner/Info.plist file. This avoids any generated-plist ambiguity.
 f=Path('ios/Runner.xcodeproj/project.pbxproj')
 s=f.read_text()
 s=s.replace('PRODUCT_BUNDLE_IDENTIFIER = com.btsmanager.btsManagerMobile;', 'PRODUCT_BUNDLE_IDENTIFIER = com.btsmanager.mobile;')
 s=s.replace('PRODUCT_BUNDLE_IDENTIFIER = com.btsmanager.bts_manager_mobile;', 'PRODUCT_BUNDLE_IDENTIFIER = com.btsmanager.mobile;')
+
 privacy = {
-    'INFOPLIST_KEY_NSLocationWhenInUseUsageDescription': 'BTS Manager cần quyền vị trí để xác định vị trí hiện tại và tính khoảng cách đến các trạm BTS gần nhất.',
-    'INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription': 'BTS Manager cần quyền vị trí để hỗ trợ chức năng xác định các trạm BTS gần nhất.',
-    'INFOPLIST_KEY_NSLocationAlwaysUsageDescription': 'BTS Manager cần quyền vị trí để hỗ trợ chức năng xác định các trạm BTS gần nhất.',
+    'NSLocationWhenInUseUsageDescription': 'BTS Manager cần quyền vị trí để xác định vị trí hiện tại và tính khoảng cách đến các trạm BTS gần nhất.',
+    'NSLocationAlwaysAndWhenInUseUsageDescription': 'BTS Manager cần quyền vị trí để hỗ trợ chức năng xác định các trạm BTS gần nhất.',
+    'NSLocationAlwaysUsageDescription': 'BTS Manager cần quyền vị trí để hỗ trợ chức năng xác định các trạm BTS gần nhất.',
 }
-# Add each privacy key to every Xcode build configuration.
-# Xcode then writes the keys into the final Runner.app/Info.plist even when
-# the generated project uses INFOPLIST_KEY_* build settings.
-import re
-for key,val in privacy.items():
-    if key in s:
-        pass
 
-# Patch the generated project file itself, not the shell environment.
-# Each `buildSettings = {` belongs to an XCBuildConfiguration section.
-def patch_build_settings(text):
-    def repl(m):
-        indent=m.group(1)
-        following=m.group(2)
-        additions=[]
-        for key,val in privacy.items():
-            if re.search(rf'(?m)^\s*{re.escape(key)}\s*=', following):
-                continue
-            additions.append(f'{indent}\t{key} = "{val}";')
-        if not additions:
-            return m.group(0)
-        return m.group(0) + ''.join(additions)
-    # Capture only the opening line plus the next small window for duplicate detection.
-    return re.sub(r'(?m)^(\s*)buildSettings = \{\n((?:[ \t]+.*\n){0,80})', repl, text)
-
-s=patch_build_settings(s)
+# Make every Xcode build configuration explicitly consume Runner/Info.plist.
+# This is deliberately limited to iOS project generation; no Dart/runtime code changes.
+def patch_build_settings(m):
+    block=m.group(0)
+    block=re.sub(r'(?m)^\s*GENERATE_INFOPLIST_FILE = YES;\s*\n', '', block)
+    if 'GENERATE_INFOPLIST_FILE = NO;' not in block:
+        block=block.replace('buildSettings = {\n', 'buildSettings = {\n\t\t\tGENERATE_INFOPLIST_FILE = NO;\n', 1)
+    if 'INFOPLIST_FILE = Runner/Info.plist;' not in block:
+        block=block.replace('buildSettings = {\n', 'buildSettings = {\n\t\t\tINFOPLIST_FILE = Runner/Info.plist;\n', 1)
+    if 'ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;' not in block:
+        block=block.replace('buildSettings = {\n', 'buildSettings = {\n\t\t\tASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;\n', 1)
+    return block
+s= re.sub(r'(?ms)buildSettings = \{.*?\n\s*\};', patch_build_settings, s)
+# Ensure privacy values are present in the actual plist as the authoritative source.
 f.write_text(s)
 
-# Keep the same BTS Manager icon used by PC/APK.
+# Ensure privacy values are present in the actual plist as the authoritative source.
+f.write_text(s)
 
-# Keep the same BTS Manager icon used by PC/APK.
+plist=Path('ios/Runner/Info.plist')
+ps=plist.read_text()
+needle='</dict>'
+for key,val in privacy.items():
+    if key not in ps:
+        ps=ps.replace(needle, f'\n\t<key>{key}</key>\n\t<string>{val}</string>\n'+needle, 1)
+plist.write_text(ps)
+
+# Keep the same BTS Manager icon as PC/APK. Build a complete iPhone/iPad
+# AppIcon asset set so iOS cannot fall back to Flutter's default icon.
 asset=Path('assets/bts_manager_icon_ios.png')
+img=Image.open(asset).convert('RGBA')
 appicon=Path('ios/Runner/Assets.xcassets/AppIcon.appiconset')
 appicon.mkdir(parents=True, exist_ok=True)
-(appicon/'bts_manager_icon_ios.png').write_bytes(asset.read_bytes())
-(appicon/'Contents.json').write_text('''{
-  "images" : [
-    {
-      "filename" : "bts_manager_icon_ios.png",
-      "idiom" : "ios-marketing",
-      "scale" : "1x",
-      "size" : "1024x1024"
-    }
-  ],
-  "info" : {
-    "author" : "xcode",
-    "version" : 1
-  }
+for old in appicon.glob('*.png'):
+    old.unlink()
+# iOS AppIcon pixel sizes (points x scale).
+sizes={
+    'Icon-App-20x20@2x.png':(40,40),
+    'Icon-App-20x20@3x.png':(60,60),
+    'Icon-App-29x29@2x.png':(58,58),
+    'Icon-App-29x29@3x.png':(87,87),
+    'Icon-App-40x40@2x.png':(80,80),
+    'Icon-App-40x40@3x.png':(120,120),
+    'Icon-App-60x60@2x.png':(120,120),
+    'Icon-App-60x60@3x.png':(180,180),
+    'Icon-App-76x76@1x.png':(76,76),
+    'Icon-App-76x76@2x.png':(152,152),
+    'Icon-App-83.5x83.5@2x.png':(167,167),
+    'Icon-App-1024x1024@1x.png':(1024,1024),
 }
-''')
+for name,size in sizes.items():
+    img.resize(size, Image.Resampling.LANCZOS).save(appicon/name)
+contents={
+  'images':[
+    {'filename':'Icon-App-20x20@2x.png','idiom':'iphone','scale':'2x','size':'20x20'},
+    {'filename':'Icon-App-20x20@3x.png','idiom':'iphone','scale':'3x','size':'20x20'},
+    {'filename':'Icon-App-29x29@2x.png','idiom':'iphone','scale':'2x','size':'29x29'},
+    {'filename':'Icon-App-29x29@3x.png','idiom':'iphone','scale':'3x','size':'29x29'},
+    {'filename':'Icon-App-40x40@2x.png','idiom':'iphone','scale':'2x','size':'40x40'},
+    {'filename':'Icon-App-40x40@3x.png','idiom':'iphone','scale':'3x','size':'40x40'},
+    {'filename':'Icon-App-60x60@2x.png','idiom':'iphone','scale':'2x','size':'60x60'},
+    {'filename':'Icon-App-60x60@3x.png','idiom':'iphone','scale':'3x','size':'60x60'},
+    {'filename':'Icon-App-20x20@1x.png','idiom':'ipad','scale':'1x','size':'20x20'},
+    {'filename':'Icon-App-20x20@2x.png','idiom':'ipad','scale':'2x','size':'20x20'},
+    {'filename':'Icon-App-29x29@1x.png','idiom':'ipad','scale':'1x','size':'29x29'},
+    {'filename':'Icon-App-29x29@2x.png','idiom':'ipad','scale':'2x','size':'29x29'},
+    {'filename':'Icon-App-40x40@1x.png','idiom':'ipad','scale':'1x','size':'40x40'},
+    {'filename':'Icon-App-40x40@2x.png','idiom':'ipad','scale':'2x','size':'40x40'},
+    {'filename':'Icon-App-76x76@1x.png','idiom':'ipad','scale':'1x','size':'76x76'},
+    {'filename':'Icon-App-76x76@2x.png','idiom':'ipad','scale':'2x','size':'76x76'},
+    {'filename':'Icon-App-83.5x83.5@2x.png','idiom':'ipad','scale':'2x','size':'83.5x83.5'},
+    {'filename':'Icon-App-1024x1024@1x.png','idiom':'ios-marketing','scale':'1x','size':'1024x1024'},
+  ],
+  'info':{'author':'xcode','version':1}
+}
+# Add the required 1x iPad small icons using the same source image.
+for name,size in [('Icon-App-20x20@1x.png',(20,20)),('Icon-App-29x29@1x.png',(29,29)),('Icon-App-40x40@1x.png',(40,40))]:
+    img.resize(size, Image.Resampling.LANCZOS).save(appicon/name)
+(appicon/'Contents.json').write_text(json.dumps(contents,ensure_ascii=False,indent=2)+'\n')
+
+f.write_text(s)
 PY
