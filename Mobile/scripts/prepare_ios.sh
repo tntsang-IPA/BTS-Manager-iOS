@@ -16,27 +16,71 @@ if 'NSLocationWhenInUseUsageDescription' not in s:
 p.write_text(s)
 
 # Configure geolocator_apple for foreground-only location permission.
+# Keep Flutter's generated Podfile dependency/target structure unchanged.
 podfile=Path('ios/Podfile')
 pod=podfile.read_text() if podfile.exists() else ''
 marker='# BTS Manager: geolocator iOS foreground-only location permission'
 if marker not in pod:
-    code='''
-    # BTS Manager: geolocator iOS foreground-only location permission
-    if target.name == "geolocator_apple"
-      target.build_configurations.each do |config|
-        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
-        defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS']
-        defs = [defs] unless defs.is_a?(Array)
-        defs << 'BYPASS_PERMISSION_LOCATION_ALWAYS=1' unless defs.include?('BYPASS_PERMISSION_LOCATION_ALWAYS=1')
-        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = defs
-      end
-    end
-'''
-    loop_marker='installer.pods_project.targets.each do |target|'
-    if loop_marker in pod:
-        pod=pod.replace(loop_marker, loop_marker+code, 1)
+    lines=pod.splitlines()
+    hook_start=None
+    for i,line in enumerate(lines):
+        if line.strip().startswith('post_install do |installer|'):
+            hook_start=i
+            break
+    block=[
+        '  # BTS Manager: geolocator iOS foreground-only location permission',
+        '  installer.pods_project.targets.each do |target|',
+        '    if target.name == "geolocator_apple"',
+        '      target.build_configurations.each do |config|',
+        "        defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS']",
+        "        defs = ['$(inherited)'] if defs.nil?",
+        '        defs = [defs] unless defs.is_a?(Array)',
+        "        defs << 'BYPASS_PERMISSION_LOCATION_ALWAYS=1' unless defs.include?('BYPASS_PERMISSION_LOCATION_ALWAYS=1')",
+        "        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = defs",
+        '      end',
+        '    end',
+        '  end',
+    ]
+    if hook_start is not None:
+        depth=0
+        insert_at=None
+        for i in range(hook_start, len(lines)):
+            st=lines[i].strip()
+            if st.startswith('post_install do'):
+                depth += 1
+            elif ' do |' in st:
+                depth += st.count(' do |')
+            elif st.startswith(('if ', 'unless ', 'case ')):
+                depth += 1
+            if st == 'end':
+                depth -= 1
+                if depth == 0:
+                    insert_at=i
+                    break
+        if insert_at is None:
+            raise SystemExit('Could not locate existing post_install end')
+        lines[insert_at:insert_at]=block
+        pod='\n'.join(lines)+'\n'
     else:
-        pod += '''\n\npost_install do |installer|\n  installer.pods_project.targets.each do |target|\n''' + code + '''  end\nend\n'''
+        fallback=[
+            '',
+            '',
+            'post_install do |installer|',
+            '  installer.pods_project.targets.each do |target|',
+            '    # BTS Manager: geolocator iOS foreground-only location permission',
+            '    if target.name == "geolocator_apple"',
+            '      target.build_configurations.each do |config|',
+            "        defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS']",
+            "        defs = ['$(inherited)'] if defs.nil?",
+            '        defs = [defs] unless defs.is_a?(Array)',
+            "        defs << 'BYPASS_PERMISSION_LOCATION_ALWAYS=1' unless defs.include?('BYPASS_PERMISSION_LOCATION_ALWAYS=1')",
+            "        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = defs",
+            '      end',
+            '    end',
+            '  end',
+            'end',
+        ]
+        pod += '\n'.join(fallback)+'\n'
     podfile.write_text(pod)
 
 # Fixed bundle identifier for the iOS target.
