@@ -9,7 +9,6 @@ python3 - <<'PY'
 from pathlib import Path
 import re
 import json
-from PIL import Image
 
 # iOS foreground/background location permission declarations.
 p=Path('ios/Runner/Info.plist')
@@ -83,32 +82,44 @@ for key,val in privacy.items():
     if key not in ps:
         ps=ps.replace(needle, f'\n\t<key>{key}</key>\n\t<string>{val}</string>\n'+needle, 1)
 plist.write_text(ps)
+PY
 
 # Keep the same BTS Manager icon as PC/APK. Build a complete iPhone/iPad
 # AppIcon asset set so iOS cannot fall back to Flutter's default icon.
-asset=Path('assets/bts_manager_icon_ios.png')
-img=Image.open(asset).convert('RGBA')
-appicon=Path('ios/Runner/Assets.xcassets/AppIcon.appiconset')
-appicon.mkdir(parents=True, exist_ok=True)
-for old in appicon.glob('*.png'):
-    old.unlink()
-# iOS AppIcon pixel sizes (points x scale).
-sizes={
-    'Icon-App-20x20@2x.png':(40,40),
-    'Icon-App-20x20@3x.png':(60,60),
-    'Icon-App-29x29@2x.png':(58,58),
-    'Icon-App-29x29@3x.png':(87,87),
-    'Icon-App-40x40@2x.png':(80,80),
-    'Icon-App-40x40@3x.png':(120,120),
-    'Icon-App-60x60@2x.png':(120,120),
-    'Icon-App-60x60@3x.png':(180,180),
-    'Icon-App-76x76@1x.png':(76,76),
-    'Icon-App-76x76@2x.png':(152,152),
-    'Icon-App-83.5x83.5@2x.png':(167,167),
-    'Icon-App-1024x1024@1x.png':(1024,1024),
+# Use macOS `sips` for resizing so the GitHub macOS runner needs no Pillow/PIL package.
+# Add the required 1x iPad small icons using the same source image.
+asset="assets/bts_manager_icon_ios.png"
+appicon="ios/Runner/Assets.xcassets/AppIcon.appiconset"
+mkdir -p "$appicon"
+find "$appicon" -maxdepth 1 -name '*.png' -delete
+
+gen_icon() {
+  local name="$1"
+  local size="$2"
+  cp "$asset" "$appicon/$name"
+  sips -z "$size" "$size" "$appicon/$name" >/dev/null
 }
-for name,size in sizes.items():
-    img.resize(size, Image.Resampling.LANCZOS).save(appicon/name)
+
+gen_icon 'Icon-App-20x20@1x.png' 20
+gen_icon 'Icon-App-20x20@2x.png' 40
+gen_icon 'Icon-App-20x20@3x.png' 60
+gen_icon 'Icon-App-29x29@1x.png' 29
+gen_icon 'Icon-App-29x29@2x.png' 58
+gen_icon 'Icon-App-29x29@3x.png' 87
+gen_icon 'Icon-App-40x40@1x.png' 40
+gen_icon 'Icon-App-40x40@2x.png' 80
+gen_icon 'Icon-App-40x40@3x.png' 120
+gen_icon 'Icon-App-60x60@2x.png' 120
+gen_icon 'Icon-App-60x60@3x.png' 180
+gen_icon 'Icon-App-76x76@1x.png' 76
+gen_icon 'Icon-App-76x76@2x.png' 152
+gen_icon 'Icon-App-83.5x83.5@2x.png' 167
+gen_icon 'Icon-App-1024x1024@1x.png' 1024
+
+python3 - <<'PY'
+from pathlib import Path
+import json
+appicon=Path('ios/Runner/Assets.xcassets/AppIcon.appiconset')
 contents={
   'images':[
     {'filename':'Icon-App-20x20@2x.png','idiom':'iphone','scale':'2x','size':'20x20'},
@@ -132,10 +143,5 @@ contents={
   ],
   'info':{'author':'xcode','version':1}
 }
-# Add the required 1x iPad small icons using the same source image.
-for name,size in [('Icon-App-20x20@1x.png',(20,20)),('Icon-App-29x29@1x.png',(29,29)),('Icon-App-40x40@1x.png',(40,40))]:
-    img.resize(size, Image.Resampling.LANCZOS).save(appicon/name)
 (appicon/'Contents.json').write_text(json.dumps(contents,ensure_ascii=False,indent=2)+'\n')
-
-f.write_text(s)
 PY
